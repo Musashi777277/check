@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重複チェック / 綴屋</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f5f3ef;
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    min-height: 100vh;
+    padding: 32px 16px 64px;
+    color: #222;
+  }
+  .header { text-align: center; margin-bottom: 28px; }
+  .header .brand { font-size: 11px; letter-spacing: 0.4em; color: #999; margin-bottom: 6px; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #222; letter-spacing: 0.05em; }
+  .header .meta { font-size: 12px; color: #aaa; margin-top: 4px; }
+  .header .user-badge {
+    display: inline-block; margin-top: 8px;
+    background: #f0f0ec; border: 1px solid #ddd;
+    font-size: 11px; color: #888;
+    padding: 3px 12px; border-radius: 10px; letter-spacing: 0.05em;
+  }
+
+  .loading { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+  .loading-dot { animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .error-box {
+    max-width: 500px; margin: 0 auto 24px;
+    background: #fdf0ee; border: 1.5px solid #e0b0aa;
+    border-radius: 10px; padding: 16px 18px;
+    font-size: 13px; color: #c0392b; display: none;
+  }
+
+  .input-row { display: flex; gap: 8px; max-width: 500px; margin: 0 auto 24px; }
+  input[type=text] {
+    flex: 1; padding: 13px 16px; font-size: 15px;
+    border: 1.5px solid #ddd; border-radius: 8px;
+    background: #fff; color: #222; outline: none;
+    font-family: inherit; transition: border-color 0.2s;
+  }
+  input[type=text]:focus { border-color: #888; }
+  .btn {
+    padding: 13px 20px; background: #222; color: #fff;
+    border: none; border-radius: 8px; font-size: 14px;
+    cursor: pointer; font-family: inherit; transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #444; }
+
+  .result {
+    max-width: 500px; margin: 0 auto 24px;
+    border-radius: 10px; padding: 20px 18px; display: none;
+  }
+  .result.exact   { background: #ede8ff; border: 1.5px solid #b49ee8; }
+  .result.similar { background: #fff8e6; border: 1.5px solid #e6c96a; }
+  .result.new     { background: #e8f7ee; border: 1.5px solid #7acca0; }
+  .result-label { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .result.exact   .result-label { color: #6133bb; }
+  .result.similar .result-label { color: #9a6a00; }
+  .result.new     .result-label { color: #1d7a4a; }
+  .result-msg { font-size: 14px; color: #555; line-height: 1.7; }
+  .result-matches {
+    margin-top: 12px; background: rgba(0,0,0,0.04);
+    border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 2;
+  }
+  .match-row { display: flex; gap: 10px; }
+  .match-num { color: #aaa; min-width: 44px; }
+
+  .history-title { font-size: 11px; color: #bbb; letter-spacing: 0.2em; margin-bottom: 8px; text-align: center; }
+  .history { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 5px; }
+  .hist-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; background: #fff;
+    border: 1px solid #eee; border-radius: 6px; font-size: 13px;
+  }
+  .hist-name { color: #555; }
+  .hist-nums { margin-left: auto; font-size: 11px; color: #bbb; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #222; color: #fff; padding: 10px 20px;
+    border-radius: 8px; font-size: 13px; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none; white-space: nowrap; z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>セラピスト重複チェック</h1>
+  <div class="meta" id="countLabel">読み込み中...</div>
+  <!-- ↓ここのユーザー名を配布先に合わせて変更する -->
+  <div class="user-badge">@ユーザー名</div>
+</div>
+
+<div class="error-box" id="errorBox"></div>
+<div class="loading" id="loadingBox">
+  <span class="loading-dot">データを読み込んでいます</span>
+</div>
+
+<div id="mainContent" style="display:none">
+  <div class="input-row">
+    <input type="text" id="nameInput" placeholder="セラピスト名を入力" autofocus>
+    <button class="btn" onclick="doCheck()">検索</button>
+  </div>
+
+  <div class="result" id="result">
+    <div class="result-label" id="resultLabel"></div>
+    <div class="result-msg" id="resultMsg"></div>
+    <div class="result-matches" id="resultMatches" style="display:none"></div>
+  </div>
+
+  <div id="historyWrap" style="display:none">
+    <div class="history-title">RECENT</div>
+    <div class="history" id="historyList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SHEET_ID = '1L_e6p62nkO4XpSzJTRFtmuiNM9beKhLGhnRAUSir1Qg';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+
+let entries = [];
+
+async function loadData() {
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    if (!res.ok) throw new Error('読み込みエラー: ' + res.status);
+    const text = await res.text();
+    entries = parseCSV(text);
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('countLabel').textContent = `掲載済み ${entries.length} 件`;
+  } catch(e) {
+    document.getElementById('loadingBox').style.display = 'none';
+    const box = document.getElementById('errorBox');
+    box.style.display = 'block';
+    box.textContent = 'データの読み込みに失敗しました。時間をおいて再度お試しください。';
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const no = cols[0], name = cols[1], status = cols[2] || '', yomi = cols[3] || '';
+    if (no && name) result.push({ num: no, name, status, yomi });
+  }
+  return result;
+}
+
+function normalize(s) {
+  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+          .replace(/\s|　/g, '').toLowerCase();
+}
+function toHira(s) {
+  return s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+function norm(s) { return toHira(normalize(s)); }
+
+function doCheck() {
+  const q = document.getElementById('nameInput').value.trim();
+  if (!q) return;
+  const nq = norm(q);
+
+  const exact = entries.filter(e => {
+    if (norm(e.name) === nq) return true;
+    if (e.yomi && norm(e.yomi) === nq) return true;
+    return false;
+  });
+
+  const similar = exact.length ? [] : entries.filter(e => {
+    const ne = norm(e.name);
+    const ny = e.yomi ? norm(e.yomi) : '';
+    if (ne.includes(nq) || nq.includes(ne)) return true;
+    if (ny && (ny.includes(nq) || nq.includes(ny))) return true;
+    const tokens = q.replace(/　/g, ' ').split(/\s+/).filter(t => t.length >= 2);
+    if (tokens.some(t => ne.includes(norm(t)))) return true;
+    if (ny && tokens.some(t => ny.includes(norm(t)))) return true;
+    return false;
+  });
+
+  const box = document.getElementById('result');
+  const lbl = document.getElementById('resultLabel');
+  const msg = document.getElementById('resultMsg');
+  const mat = document.getElementById('resultMatches');
+  box.className = 'result';
+
+  if (exact.length) {
+    box.classList.add('exact'); box.style.display = 'block';
+    lbl.textContent = '✅ 既出';
+    msg.textContent = `「${q}」は既にリストに存在します。重複しています。`;
+    mat.style.display = 'block';
+    mat.innerHTML = exact.map(e => `<div class="match-row"><span class="match-num">No.${e.num}</span><span>${e.name}</span></div>`).join('');
+  } else if (similar.length) {
+    box.classList.add('similar'); box.style.display = 'block';
+    lbl.textContent = '⚠️ 類似あり';
+    msg.textContent = `「${q}」そのものはありませんが、似た名前が見つかりました。`;
+    mat.style.display = 'block';
+    mat.innerHTML = similar.map(e => `<div class="match-row"><span class="match-num">No.${e.num}</span><span>${e.name}</span></div>`).join('');
+  } else {
+    box.classList.add('new'); box.style.display = 'block';
+    lbl.textContent = '✨ 未掲載';
+    msg.textContent = `「${q}」はリストにありません。新規扱いでOKです。`;
+    mat.style.display = 'none';
+  }
+
+  addHistory(q, exact.length ? 'exact' : similar.length ? 'similar' : 'new', exact.length ? exact : similar);
+  document.getElementById('nameInput').value = '';
+}
+
+document.getElementById('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') doCheck(); });
+
+let histArr = [];
+function addHistory(q, type, matches) {
+  histArr.unshift({ q, type, matches });
+  if (histArr.length > 10) histArr.pop();
+  renderHistory();
+}
+function renderHistory() {
+  if (histArr.length < 2) { document.getElementById('historyWrap').style.display = 'none'; return; }
+  document.getElementById('historyWrap').style.display = 'block';
+  document.getElementById('historyList').innerHTML = histArr.slice(1).map(h => `
+    <div class="hist-item">
+      <span>${h.type === 'exact' ? '✅' : h.type === 'similar' ? '⚠️' : '✨'}</span>
+      <span class="hist-name">${h.q}</span>
+      ${h.matches.length ? `<span class="hist-nums">No.${h.matches.map(m => m.num).join(', ')}</span>` : ''}
+    </div>`).join('');
+}
+
+loadData();
+</script>
+</body>
+</html>
