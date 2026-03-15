@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重複チェック（管理版）/ 綴屋</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f5f3ef;
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    min-height: 100vh;
+    padding: 32px 16px 64px;
+    color: #222;
+  }
+  .header { text-align: center; margin-bottom: 28px; }
+  .header .brand { font-size: 11px; letter-spacing: 0.4em; color: #999; margin-bottom: 6px; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #222; letter-spacing: 0.05em; }
+  .header .meta { font-size: 12px; color: #aaa; margin-top: 4px; display: flex; justify-content: center; gap: 12px; }
+  .header .meta .admin-badge {
+    background: #222; color: #fff; font-size: 10px;
+    padding: 2px 8px; border-radius: 10px; letter-spacing: 0.05em;
+  }
+
+  .loading {
+    text-align: center; padding: 40px; color: #aaa; font-size: 14px;
+  }
+  .loading-dot { animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .error-box {
+    max-width: 500px; margin: 0 auto 24px;
+    background: #fdf0ee; border: 1.5px solid #e0b0aa;
+    border-radius: 10px; padding: 16px 18px;
+    font-size: 13px; color: #c0392b; display: none;
+  }
+
+  .tabs {
+    display: flex; max-width: 500px; margin: 0 auto 24px;
+    border-bottom: 2px solid #e0ddd8;
+  }
+  .tab {
+    padding: 10px 20px; font-size: 13px; color: #aaa;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s;
+    font-family: inherit; background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .tab.active { color: #222; border-bottom-color: #222; font-weight: 700; }
+  .tab:hover:not(.active) { color: #666; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .input-row { display: flex; gap: 8px; max-width: 500px; margin: 0 auto 24px; }
+  input[type=text] {
+    flex: 1; padding: 13px 16px; font-size: 15px;
+    border: 1.5px solid #ddd; border-radius: 8px;
+    background: #fff; color: #222; outline: none;
+    font-family: inherit; transition: border-color 0.2s;
+  }
+  input[type=text]:focus { border-color: #888; }
+
+  .btn {
+    padding: 13px 20px; background: #222; color: #fff;
+    border: none; border-radius: 8px; font-size: 14px;
+    cursor: pointer; font-family: inherit; transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #444; }
+  .btn.secondary { background: #fff; color: #555; border: 1.5px solid #ddd; }
+  .btn.secondary:hover { background: #f5f3ef; }
+  .btn.danger { background: #fff; color: #c0392b; border: 1.5px solid #e0b0aa; }
+  .btn.danger:hover { background: #fdf0ee; }
+  .btn.small { padding: 8px 14px; font-size: 13px; }
+
+  .result {
+    max-width: 500px; margin: 0 auto 24px;
+    border-radius: 10px; padding: 20px 18px; display: none;
+  }
+  .result.exact   { background: #ede8ff; border: 1.5px solid #b49ee8; }
+  .result.similar { background: #fff8e6; border: 1.5px solid #e6c96a; }
+  .result.new     { background: #e8f7ee; border: 1.5px solid #7acca0; }
+  .result-label { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .result.exact   .result-label { color: #6133bb; }
+  .result.similar .result-label { color: #9a6a00; }
+  .result.new     .result-label { color: #1d7a4a; }
+  .result-msg { font-size: 14px; color: #555; line-height: 1.7; }
+  .result-matches {
+    margin-top: 12px; background: rgba(0,0,0,0.04);
+    border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 2;
+  }
+  .match-row { display: flex; gap: 10px; }
+  .match-num { color: #aaa; min-width: 44px; }
+
+  .history-title { font-size: 11px; color: #bbb; letter-spacing: 0.2em; margin-bottom: 8px; text-align: center; }
+  .history { max-width: 500px; margin: 0 auto; display: flex; flex-direction: column; gap: 5px; }
+  .hist-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; background: #fff;
+    border: 1px solid #eee; border-radius: 6px; font-size: 13px;
+  }
+  .hist-name { color: #555; }
+  .hist-nums { margin-left: auto; font-size: 11px; color: #bbb; }
+
+  .add-form {
+    max-width: 500px; margin: 0 auto 12px;
+    background: #fff; border: 1.5px solid #e0ddd8;
+    border-radius: 10px; padding: 20px 18px;
+  }
+  .add-form label { font-size: 12px; color: #888; display: block; margin-bottom: 8px; }
+  .add-form .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .add-form .row:last-child { margin-bottom: 0; }
+  .num-input { flex: 0 0 80px !important; }
+  .add-note { font-size: 12px; color: #bbb; max-width: 500px; margin: 8px auto 0; text-align: center; }
+
+  .sheets-info {
+    max-width: 500px; margin: 0 auto 16px;
+    background: #f0f7ff; border: 1.5px solid #b0d4f0;
+    border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #555; line-height: 1.8;
+  }
+  .sheets-info a { color: #2980b9; }
+
+  .list-controls { max-width: 500px; margin: 0 auto 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .search-filter { max-width: 500px; margin: 0 auto 12px; }
+  .search-filter input { width: 100%; }
+  .entry-list {
+    max-width: 500px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 400px; overflow-y: auto;
+  }
+  .entry-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; background: #fff;
+    border: 1px solid #eee; border-radius: 6px; font-size: 13px;
+  }
+  .entry-num { color: #bbb; min-width: 44px; font-size: 12px; }
+  .entry-name { flex: 1; color: #333; }
+  .entry-yomi { font-size: 11px; color: #bbb; }
+  .entry-status { font-size: 10px; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+  .entry-status.published { background: #e8f7ee; color: #1d7a4a; }
+  .entry-status.unpublished { background: #fff8e6; color: #9a6a00; }
+  .empty-msg { text-align: center; color: #bbb; font-size: 13px; padding: 32px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #222; color: #fff; padding: 10px 20px;
+    border-radius: 8px; font-size: 13px; opacity: 0;
+    transition: opacity 0.3s; pointer-events: none; white-space: nowrap; z-index: 999;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">綴屋 TSUZURIYA</div>
+  <h1>セラピスト重複チェック</h1>
+  <div class="meta">
+    <span id="countLabel">読み込み中...</span>
+    <span class="admin-badge">管理版</span>
+  </div>
+</div>
+
+<div class="error-box" id="errorBox"></div>
+<div class="loading" id="loadingBox">
+  <span class="loading-dot">データを読み込んでいます</span>
+</div>
+
+<div id="mainContent" style="display:none">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('check')">🔍 検索</button>
+    <button class="tab" onclick="switchTab('add')">＋ 追加メモ</button>
+    <button class="tab" onclick="switchTab('manage')">📋 リスト</button>
+  </div>
+
+  <!-- 検索 -->
+  <div class="panel active" id="tab-check">
+    <div class="input-row">
+      <input type="text" id="nameInput" placeholder="セラピスト名を入力" autofocus>
+      <button class="btn" onclick="doCheck()">検索</button>
+    </div>
+    <div class="result" id="result">
+      <div class="result-label" id="resultLabel"></div>
+      <div class="result-msg" id="resultMsg"></div>
+      <div class="result-matches" id="resultMatches" style="display:none"></div>
+    </div>
+    <div id="historyWrap" style="display:none">
+      <div class="history-title">RECENT</div>
+      <div class="history" id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- 追加メモ -->
+  <div class="panel" id="tab-add">
+    <div class="sheets-info">
+      📊 データはGoogleスプレッドシートで管理しています。<br>
+      新しいセラピストを追加する場合は、スプレッドシートに直接行を追加してください。<br>
+      追加後「データを再読み込み」ボタンで最新データを反映できます。
+    </div>
+    <div style="max-width:500px; margin: 0 auto; display:flex; gap:8px;">
+      <button class="btn secondary" style="flex:1" onclick="reloadData()">🔄 データを再読み込み</button>
+      <a href="https://docs.google.com/spreadsheets/d/1L_e6p62nkO4XpSzJTRFtmuiNM9beKhLGhnRAUSir1Qg/edit" target="_blank">
+        <button class="btn" style="white-space:nowrap">スプレッドシートを開く</button>
+      </a>
+    </div>
+  </div>
+
+  <!-- リスト -->
+  <div class="panel" id="tab-manage">
+    <div class="list-controls">
+      <button class="btn secondary small" onclick="reloadData()">🔄 再読み込み</button>
+    </div>
+    <div class="search-filter">
+      <input type="text" id="filterInput" placeholder="絞り込み検索..." oninput="renderEntryList()">
+    </div>
+    <div class="entry-list" id="entryList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SHEET_ID = '1L_e6p62nkO4XpSzJTRFtmuiNM9beKhLGhnRAUSir1Qg';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+
+let entries = [];
+
+// ========== データ読み込み ==========
+async function loadData() {
+  document.getElementById('loadingBox').style.display = 'block';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    if (!res.ok) throw new Error('読み込みエラー: ' + res.status);
+    const text = await res.text();
+    entries = parseCSV(text);
+    document.getElementById('loadingBox').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'block';
+    updateCount();
+  } catch(e) {
+    document.getElementById('loadingBox').style.display = 'none';
+    const box = document.getElementById('errorBox');
+    box.style.display = 'block';
+    box.textContent = 'データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。(' + e.message + ')';
+  }
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const no = cols[0], name = cols[1], status = cols[2] || '公開済み', yomi = cols[3] || '';
+    if (no && name) result.push({ num: no, name, status, yomi });
+  }
+  return result;
+}
+
+function updateCount() {
+  document.getElementById('countLabel').textContent = `掲載済み ${entries.length} 件`;
+}
+
+async function reloadData() {
+  await loadData();
+  showToast('データを再読み込みしました');
+  renderEntryList();
+}
+
+// ========== 正規化 ==========
+function normalize(s) {
+  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+          .replace(/\s|　/g, '').toLowerCase();
+}
+function toHira(s) {
+  return s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+function norm(s) { return toHira(normalize(s)); }
+
+// ========== 検索 ==========
+function doCheck() {
+  const q = document.getElementById('nameInput').value.trim();
+  if (!q) return;
+  const nq = norm(q);
+
+  const exact = entries.filter(e => {
+    if (norm(e.name) === nq) return true;
+    if (e.yomi && norm(e.yomi) === nq) return true;
+    return false;
+  });
+
+  const similar = exact.length ? [] : entries.filter(e => {
+    const ne = norm(e.name);
+    const ny = e.yomi ? norm(e.yomi) : '';
+    // name または yomi で部分一致
+    if (ne.includes(nq) || nq.includes(ne)) return true;
+    if (ny && (ny.includes(nq) || nq.includes(ny))) return true;
+    // トークン一致
+    const tokens = q.replace(/　/g, ' ').split(/\s+/).filter(t => t.length >= 2);
+    if (tokens.some(t => ne.includes(norm(t)))) return true;
+    if (ny && tokens.some(t => ny.includes(norm(t)))) return true;
+    return false;
+  });
+
+  const box = document.getElementById('result');
+  const lbl = document.getElementById('resultLabel');
+  const msg = document.getElementById('resultMsg');
+  const mat = document.getElementById('resultMatches');
+  box.className = 'result';
+
+  if (exact.length) {
+    box.classList.add('exact'); box.style.display = 'block';
+    lbl.textContent = '✅ 既出';
+    msg.textContent = `「${q}」は既にリストに存在します。重複しています。`;
+    mat.style.display = 'block';
+    mat.innerHTML = exact.map(e => `<div class="match-row"><span class="match-num">No.${e.num}</span><span>${e.name}</span></div>`).join('');
+  } else if (similar.length) {
+    box.classList.add('similar'); box.style.display = 'block';
+    lbl.textContent = '⚠️ 類似あり';
+    msg.textContent = `「${q}」そのものはありませんが、似た名前が見つかりました。`;
+    mat.style.display = 'block';
+    mat.innerHTML = similar.map(e => `<div class="match-row"><span class="match-num">No.${e.num}</span><span>${e.name}</span></div>`).join('');
+  } else {
+    box.classList.add('new'); box.style.display = 'block';
+    lbl.textContent = '✨ 未掲載';
+    msg.textContent = `「${q}」はリストにありません。新規扱いでOKです。`;
+    mat.style.display = 'none';
+  }
+
+  addHistory(q, exact.length ? 'exact' : similar.length ? 'similar' : 'new', exact.length ? exact : similar);
+  document.getElementById('nameInput').value = '';
+}
+
+document.getElementById('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') doCheck(); });
+
+let histArr = [];
+function addHistory(q, type, matches) {
+  histArr.unshift({ q, type, matches });
+  if (histArr.length > 10) histArr.pop();
+  renderHistory();
+}
+function renderHistory() {
+  if (histArr.length < 2) { document.getElementById('historyWrap').style.display = 'none'; return; }
+  document.getElementById('historyWrap').style.display = 'block';
+  document.getElementById('historyList').innerHTML = histArr.slice(1).map(h => `
+    <div class="hist-item">
+      <span>${h.type === 'exact' ? '✅' : h.type === 'similar' ? '⚠️' : '✨'}</span>
+      <span class="hist-name">${h.q}</span>
+      ${h.matches.length ? `<span class="hist-nums">No.${h.matches.map(m => m.num).join(', ')}</span>` : ''}
+    </div>`).join('');
+}
+
+// ========== リスト ==========
+function renderEntryList() {
+  const filter = norm(document.getElementById('filterInput').value.trim());
+  const filtered = filter
+    ? entries.filter(e => norm(e.name).includes(filter) || e.num.includes(filter) || (e.yomi && norm(e.yomi).includes(filter)))
+    : entries;
+  const el = document.getElementById('entryList');
+  if (filtered.length === 0) { el.innerHTML = '<div class="empty-msg">該当なし</div>'; return; }
+  el.innerHTML = filtered.map(e => `
+    <div class="entry-item">
+      <span class="entry-num">No.${e.num}</span>
+      <span class="entry-name">${e.name}${e.yomi ? ` <span class="entry-yomi">(${e.yomi})</span>` : ''}</span>
+      <span class="entry-status ${e.status === '未公開' ? 'unpublished' : 'published'}">${e.status}</span>
+    </div>`).join('');
+}
+
+// ========== タブ ==========
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['check','add','manage'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'manage') renderEntryList();
+  if (name === 'check') setTimeout(() => document.getElementById('nameInput').focus(), 50);
+}
+
+// ========== トースト ==========
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// 起動
+loadData();
+</script>
+</body>
+</html>
